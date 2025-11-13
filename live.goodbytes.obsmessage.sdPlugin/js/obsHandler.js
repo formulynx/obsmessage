@@ -4,6 +4,7 @@
  * @property {string} password
  * @property {OBSWebSocket} obs
  * @property {boolean} connected
+ * @property {Promise<*> | null} connectionPromise
  */
 class ObsHandler {
 
@@ -12,30 +13,36 @@ class ObsHandler {
      */
     constructor(jsonObj) {
         this.obs = new OBSWebSocket();
+        this.connected = false;
+        this.connectionPromise = null;
 
         // You must add this handler to avoid uncaught exceptions.
         this.obs.on('error', err => {
-            console.error('socket error:', err);
+            console.error(`OBS Websocket: error.`, err);
         });
 
         this.obs.on('ConnectionOpened', data => {
-            this.connected = false;
             console.log(`OBS Websocket: Connection opening...`, data);
             action.setObsStatus(); // action.setState();
         });
         this.obs.on('ConnectionClosed', data => {
             this.connected = false;
+            this.connectionPromise = null;
             console.log(`OBS Websocket: Connection terminated.`, data);
             action.setObsStatus(); // action.setState();
         });
         this.obs.on('AuthenticationSuccess', data => {
-            this.connected = true;
             console.log(`OBS Websocket: Success! We're connected & authenticated.`, data);
             action.setObsStatus(); // action.setState();
         });
         this.obs.on('AuthenticationFailure', data => {
             this.connected = false;
+            this.connectionPromise = null;
             console.error(`OBS Websocket: Authentication FAILED.`, data);
+            action.setObsStatus(); // action.setState();
+        });
+        this.obs.on('Identified', data => {
+            console.log(`OBS Websocket: Identified! We're connected without authentication.`, data);
             action.setObsStatus(); // action.setState();
         });
     }
@@ -91,25 +98,59 @@ class ObsHandler {
      * @param {boolean} [reconnect = false] Force a reconnect if we are already connected?
      * @return {Promise<*>}
      */
-    connect(reconnect) {
-        if (this.connected === true && reconnect !== true) {
-            return new Promise((resolve, reject) => { resolve(); })
+    connect(reconnect = false) {
+        if (this.connected && !reconnect) {
+            return Promise.resolve();
         }
-        let password = null;
-        if (this.password !== '') {
-            password = this.password;
+        if (this.connectionPromise && !reconnect) {
+            return this.connectionPromise;
         }
-        console.log('--- OBS Websocket: connect() ---', this.getOBSAddress(), password);
-        return this.obs.connect(this.getOBSAddress(), password);
+
+        if (reconnect) {
+            try {
+                this.obs.disconnect();
+            } catch (e) {
+                console.warn(`OBS Websocket: error on forced disconnect before reconnect:`, e);
+            }
+            this.connected = false;
+            this.connectionPromise = null;
+        }
+
+        const address = this.getOBSAddress();
+        const password = this.password || undefined;
+
+        console.log(`OBS Websocket: connect() ->`, address);
+
+        const promise = this.obs.connect(address, password)
+            .then(data => {
+                this.connected = true;
+                this.connectionPromise = null;
+                return data;
+            })
+            .catch(err => {
+                this.connected = false;
+                this.connectionPromise = null;
+                throw err;
+            });
+
+        this.connectionPromise = promise;
+        return promise;
     }
 
     /**
      *
      */
     disconnect() {
-        if (this.connected === true) {
-            this.obs.disconnect();
+        if (this.connected || this.connectionPromise) {
+            try {
+                this.obs.disconnect();
+            } catch (err) {
+                console.warn('OBS Websocket: error on disconnect()', err)
+            }
+
         }
+        this.connected = false;
+        this.connectionPromise = null;
     }
 
     /**
