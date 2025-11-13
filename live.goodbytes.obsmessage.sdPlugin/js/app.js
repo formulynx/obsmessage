@@ -1,6 +1,7 @@
 /* global $SD */
 $SD.on('connected', conn => connected(conn));
 const obs = new ObsHandler();
+let  requestedGlobals = false;
 
 /**
  * @param {Object} jsn
@@ -8,6 +9,11 @@ const obs = new ObsHandler();
 function connected(jsn) {
     debugLog('Connected Plugin:', jsn);
     console.log('--- Connected Plugin ---', jsn);
+
+    if (!requestedGlobals) {
+        $SD.api.getGlobalSettings();
+        requestedGlobals = true;
+    }
 
     /** subscribe to the willAppear event */
     $SD.on('live.goodbytes.obsmessage.action.willAppear', jsonObj =>
@@ -74,7 +80,6 @@ const action = {
             this.type
         );
 
-        $SD.api.getGlobalSettings();
     },
 
     /**
