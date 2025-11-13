@@ -51,7 +51,7 @@ class ObsHandler {
         if(settings !== null && settings !== undefined)
         {
             this.ipAddress = settings['ipAddress'] || '127.0.0.1';
-            this.port = settings['port'] || 4444;
+            this.port = settings['port'] || 4455;
             this.password = settings['password'] || '';
         }
         return {
@@ -67,7 +67,7 @@ class ObsHandler {
     defaultSettings() {
         return {
             'ipAddress': '127.0.0.1',
-            'port': 4444,
+            'port': 4455,
             'password': ''
         };
     }
